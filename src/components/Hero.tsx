@@ -64,10 +64,10 @@ export default function Hero() {
         <div className="absolute inset-0">
           <iframe
             ref={iframeRef}
-            src={`https://www.youtube.com/embed/${YOUTUBE_VIDEO_ID}?autoplay=1&mute=1&loop=1&playlist=${YOUTUBE_VIDEO_ID}&controls=0&showinfo=0&rel=0&enablejsapi=1&playsinline=1&modestbranding=1&iv_load_policy=3`}
+            src={`https://www.youtube.com/embed/${YOUTUBE_VIDEO_ID}?autoplay=1&mute=1&loop=1&playlist=${YOUTUBE_VIDEO_ID}&controls=0&showinfo=0&rel=0&enablejsapi=1&playsinline=1&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&cc_load_policy=0`}
             allow="autoplay; encrypted-media"
             allowFullScreen
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
             style={{
               width: "100vw",
               height: "56.25vw",
@@ -75,6 +75,8 @@ export default function Hero() {
               minWidth: "177.78vh",
             }}
           />
+          {/* Blocks all pointer events reaching the iframe — hides YouTube UI */}
+          <div className="absolute inset-0 z-10" />
         </div>
 
         {/* Subtle bottom fade so scroll section blends in */}
