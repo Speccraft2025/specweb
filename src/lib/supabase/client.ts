@@ -1,5 +1,9 @@
 import { createBrowserClient } from '@supabase/ssr'
 
+function sanitize(val: string): string {
+  return val.replace(/[^\x20-\x7E]/g, '').trim()
+}
+
 export function createClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -10,5 +14,5 @@ export function createClient() {
     )
   }
 
-  return createBrowserClient(url, key)
+  return createBrowserClient(sanitize(url), sanitize(key))
 }
