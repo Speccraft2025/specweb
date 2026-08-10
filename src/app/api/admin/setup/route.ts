@@ -1,11 +1,27 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-export async function POST(request: Request) {
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'jayzelisaac@gmail.com').split(',').map(e => e.trim().toLowerCase())
+
+async function isAuthorized(request: Request): Promise<boolean> {
   const authHeader = request.headers.get('authorization')
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (serviceKey && authHeader === `Bearer ${serviceKey}`) return true
 
-  if (!serviceKey || authHeader !== `Bearer ${serviceKey}`) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user && ADMIN_EMAILS.includes(user.email?.toLowerCase() || '')) return true
+  } catch {
+    // cookie auth not available
+  }
+
+  return false
+}
+
+export async function POST(request: Request) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -58,6 +74,30 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ contract: data })
+  }
+
+  if (action === 'review_kyc') {
+    const { kyc_id, decision, rejection_reason } = body
+
+    const updateData: Record<string, unknown> = {
+      status: decision === 'approve' ? 'approved' : 'rejected',
+      reviewed_at: new Date().toISOString(),
+    }
+
+    if (decision === 'reject' && rejection_reason) {
+      updateData.rejection_reason = rejection_reason
+    }
+
+    const { error } = await supabase
+      .from('kyc_verifications')
+      .update(updateData)
+      .eq('id', kyc_id)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ success: true })
   }
 
   if (action === 'list_artists') {
