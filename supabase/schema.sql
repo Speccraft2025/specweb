@@ -207,3 +207,22 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ── Artist Invites (invite-only onboarding) ──────────────────────────────────
+create table if not exists public.artist_invites (
+  id uuid default uuid_generate_v4() primary key,
+  token uuid default uuid_generate_v4() unique not null,
+  email text,                                    -- optional pre-fill
+  name  text,                                    -- optional pre-fill
+  created_by uuid references auth.users,
+  artist_id uuid references public.artists,      -- set when invite is used
+  status text default 'pending' check (status in ('pending', 'used', 'expired')),
+  used_at timestamptz,
+  expires_at timestamptz default (now() + interval '30 days'),
+  created_at timestamptz default now()
+);
+
+alter table public.artist_invites enable row level security;
+
+-- Only admins (via service role) can create/read invites; no artist-facing policy needed
+-- The invite page validates the token server-side using the admin client

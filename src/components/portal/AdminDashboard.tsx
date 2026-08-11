@@ -311,6 +311,38 @@ function ContractsTab({ artists, contracts, signatures }: { artists: Artist[]; c
   const [selectedArtist, setSelectedArtist] = useState('')
   const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split('T')[0])
 
+  // Invite new artist
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteName, setInviteName] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteLink, setInviteLink] = useState('')
+  const [inviteMsg, setInviteMsg] = useState('')
+
+  async function handleInvite() {
+    setInviting(true)
+    setInviteLink('')
+    setInviteMsg('')
+    const res = await fetch('/api/admin/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: inviteEmail, name: inviteName }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setInviteLink(data.url)
+      setInviteMsg('Invite link generated! Copy and send it to the artist.')
+    } else {
+      setInviteMsg(`Error: ${data.error}`)
+    }
+    setInviting(false)
+  }
+
+  function copyInviteLink() {
+    navigator.clipboard.writeText(inviteLink)
+    setInviteMsg('Copied to clipboard!')
+  }
+
   const artistsWithoutContract = artists.filter(a => !contracts.some(c => c.artist_id === a.id))
 
   async function handleSend() {
@@ -346,17 +378,63 @@ function ContractsTab({ artists, contracts, signatures }: { artists: Artist[]; c
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-lg font-semibold text-white">Contracts ({contracts.length})</h2>
-        <button
-          onClick={() => setShowSend(!showSend)}
-          disabled={artistsWithoutContract.length === 0}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--gold)] text-black text-sm font-semibold rounded-lg hover:bg-[var(--gold-dim)] transition-colors disabled:opacity-30"
-        >
-          <Send className="w-4 h-4" />
-          Send Contract
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowInvite(!showInvite); setShowSend(false) }}
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--gold)] text-black text-sm font-semibold rounded-lg hover:bg-[var(--gold-dim)] transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Invite Artist
+          </button>
+          <button
+            onClick={() => { setShowSend(!showSend); setShowInvite(false) }}
+            disabled={artistsWithoutContract.length === 0}
+            className="flex items-center gap-2 px-4 py-2 border border-[var(--gray)] text-[var(--text-muted)] text-sm font-semibold rounded-lg hover:text-white transition-colors disabled:opacity-30"
+          >
+            <Send className="w-4 h-4" />
+            Send to Existing
+          </button>
+        </div>
       </div>
+
+      {/* Invite new artist panel */}
+      {showInvite && (
+        <div className="bg-[var(--dark-3)] border border-[var(--gold)]/20 rounded-xl p-6 space-y-4">
+          <h3 className="text-sm font-semibold text-white">Generate Artist Invite Link</h3>
+          <p className="text-xs text-[var(--text-muted)]">The link lets the artist read the contract, agree, sign up, and submit KYC — all in one flow. No account needed upfront.</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Artist Name (optional)</label>
+              <input value={inviteName} onChange={e => setInviteName(e.target.value)}
+                placeholder="e.g. Zara M"
+                className="w-full px-3 py-2 bg-[var(--dark-2)] border border-[var(--gray)] rounded-lg text-white text-sm focus:outline-none focus:border-[var(--gold)] transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Email (optional pre-fill)</label>
+              <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                placeholder="artist@email.com"
+                className="w-full px-3 py-2 bg-[var(--dark-2)] border border-[var(--gray)] rounded-lg text-white text-sm focus:outline-none focus:border-[var(--gold)] transition-colors" />
+            </div>
+          </div>
+          {inviteLink && (
+            <div className="flex items-center gap-2">
+              <input readOnly value={inviteLink}
+                className="flex-1 px-3 py-2 bg-black/40 border border-[var(--gold)]/30 rounded-lg text-[var(--gold)] text-xs font-mono truncate" />
+              <button onClick={copyInviteLink}
+                className="px-4 py-2 bg-[var(--gold)] text-black text-xs font-bold rounded-lg hover:bg-[var(--gold-dim)] transition-colors whitespace-nowrap">
+                Copy Link
+              </button>
+            </div>
+          )}
+          {inviteMsg && <p className={`text-xs ${inviteMsg.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>{inviteMsg}</p>}
+          <button onClick={handleInvite} disabled={inviting}
+            className="px-6 py-2 bg-[var(--gold)] text-black text-sm font-semibold rounded-lg hover:bg-[var(--gold-dim)] transition-colors disabled:opacity-30">
+            {inviting ? 'Generating…' : 'Generate Invite Link'}
+          </button>
+        </div>
+      )}
 
       {showSend && (
         <div className="bg-[var(--dark-3)] border border-[var(--gold)]/20 rounded-xl p-6 space-y-4">
