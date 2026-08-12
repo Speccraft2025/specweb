@@ -64,6 +64,12 @@ export default function ArtistPage({ params }: { params: { slug: string } }) {
                 <ExternalLink size={12} /> Instagram
               </a>
             )}
+            {artist.spotifyUrl && (
+              <a href={artist.spotifyUrl} target="_blank" rel="noopener noreferrer"
+                className="px-5 py-2.5 rounded-full border border-white/20 text-white/60 text-xs font-semibold hover:border-[#1DB954]/50 hover:text-[#1DB954] transition-colors flex items-center gap-2">
+                <ExternalLink size={12} /> Spotify
+              </a>
+            )}
             {artist.youtubeUrl && (
               <a href={artist.youtubeUrl} target="_blank" rel="noopener noreferrer"
                 className="px-5 py-2.5 rounded-full border border-white/20 text-white/60 text-xs font-semibold hover:border-[#FFB000]/50 hover:text-[#FFB000] transition-colors flex items-center gap-2">
