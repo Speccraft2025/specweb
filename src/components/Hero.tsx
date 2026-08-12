@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Play, VolumeX, Volume2, ChevronDown } from "lucide-react";
 
 // Replace with your actual YouTube video ID (the part after ?v= in the URL)
-const YOUTUBE_VIDEO_ID = "dQw4w9WgXcQ";
+const YOUTUBE_VIDEO_ID = "yh_Zgclh2rs";
 
 const stats = [
   { value: "400+", label: "Songs Produced" },
