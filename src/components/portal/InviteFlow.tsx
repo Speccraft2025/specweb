@@ -123,6 +123,84 @@ export default function InviteFlow({
   const [kycError, setKycError] = useState('')
   const [submittingKyc, setSubmittingKyc] = useState(false)
 
+  async function upsertKycAndContract(userId: string) {
+    const supabase = createClient()
+
+    const artistPayload = {
+      full_legal_name: fullName,
+      email,
+      stage_name: stageName || null,
+      phone: phone || null,
+      date_of_birth: dob || null,
+      nationality,
+      residential_address: address || null,
+      national_id_number: docType === 'national_id' ? idNumber : null,
+      passport_number: docType === 'passport' ? idNumber : null,
+    }
+
+    const { error: artistError } = await supabase
+      .from('artists')
+      .upsert({ id: userId, ...artistPayload })
+
+    if (artistError) throw new Error(artistError.message)
+
+    const { data: existingKyc, error: kycLookupError } = await supabase
+      .from('kyc_verifications')
+      .select('id')
+      .eq('artist_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (kycLookupError) throw new Error(kycLookupError.message)
+
+    const kycPayload = {
+      artist_id: userId,
+      document_type: docType,
+      status: 'submitted' as const,
+      rejection_reason: null,
+      reviewed_at: null,
+    }
+
+    if (existingKyc?.id) {
+      const { error: kycUpdateError } = await supabase
+        .from('kyc_verifications')
+        .update(kycPayload)
+        .eq('id', existingKyc.id)
+
+      if (kycUpdateError) throw new Error(kycUpdateError.message)
+    } else {
+      const { error: kycInsertError } = await supabase
+        .from('kyc_verifications')
+        .insert(kycPayload)
+
+      if (kycInsertError) throw new Error(kycInsertError.message)
+    }
+
+    const { data: existingContract, error: contractLookupError } = await supabase
+      .from('contracts')
+      .select('id, status')
+      .eq('artist_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (contractLookupError) throw new Error(contractLookupError.message)
+
+    if (!existingContract) {
+      const { error: contractInsertError } = await supabase
+        .from('contracts')
+        .insert({
+          artist_id: userId,
+          version: '2.3',
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+        })
+
+      if (contractInsertError) throw new Error(contractInsertError.message)
+    }
+  }
+
   function handleContractScroll(e: React.UIEvent<HTMLDivElement>) {
     const el = e.currentTarget
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) {
@@ -168,35 +246,14 @@ export default function InviteFlow({
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setKycError('Session expired — please refresh.'); setSubmittingKyc(false); return }
 
-    // Update artist profile
-    await supabase.from('artists').update({
-      stage_name: stageName || null,
-      phone: phone || null,
-      date_of_birth: dob || null,
-      nationality,
-      residential_address: address || null,
-      ...(docType === 'national_id' ? { national_id_number: idNumber } : { passport_number: idNumber }),
-    }).eq('id', user.id)
-
-    // Create KYC record
-    const { error: kycErr } = await supabase.from('kyc_verifications').insert({
-      artist_id: user.id,
-      document_type: docType,
-      status: 'submitted',
-    })
-
-    if (kycErr) { setKycError(kycErr.message); setSubmittingKyc(false); return }
-
-    // Create draft contract for admin to countersign
-    await supabase.from('contracts').insert({
-      artist_id: user.id,
-      version: '2.3',
-      status: 'signed',
-      signed_at: new Date().toISOString(),
-    })
-
-    setStep('done')
-    setSubmittingKyc(false)
+    try {
+      await upsertKycAndContract(user.id)
+      setStep('done')
+    } catch (error) {
+      setKycError(error instanceof Error ? error.message : 'Failed to complete onboarding.')
+    } finally {
+      setSubmittingKyc(false)
+    }
   }
 
   return (
@@ -206,7 +263,7 @@ export default function InviteFlow({
         <div className="text-center mb-10">
           <p className="text-[#FFB000] text-xs font-bold tracking-[0.3em] uppercase mb-2">Spec Craft Media Ltd</p>
           <h1 className="text-2xl font-black text-white">Artist Onboarding</h1>
-          <p className="text-white/40 text-sm mt-1">You've been invited to join the roster.</p>
+          <p className="text-white/40 text-sm mt-1">You&apos;ve been invited to join the roster.</p>
         </div>
 
         {/* Progress */}
@@ -390,10 +447,10 @@ export default function InviteFlow({
             <div className="w-16 h-16 rounded-full bg-[#FFB000]/10 border border-[#FFB000]/20 flex items-center justify-center mx-auto mb-6">
               <CheckCircle size={28} className="text-[#FFB000]" />
             </div>
-            <h2 className="text-xl font-black text-white mb-2">You're on the waitlist!</h2>
+            <h2 className="text-xl font-black text-white mb-2">You&apos;re on the waitlist!</h2>
             <p className="text-white/40 text-sm leading-relaxed max-w-sm mx-auto mb-8">
               Your registration and KYC have been submitted. Spec Craft Media will review
-              your details and countersign your agreement. You'll receive an email once
+              your details and countersign your agreement. You&apos;ll receive an email once
               your account is activated.
             </p>
             <a

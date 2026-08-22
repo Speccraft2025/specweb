@@ -20,6 +20,9 @@ export interface KycVerification {
   document_front_url: string | null
   document_back_url: string | null
   selfie_url: string | null
+  document_front_signed_url?: string | null
+  document_back_signed_url?: string | null
+  selfie_signed_url?: string | null
   status: 'pending' | 'submitted' | 'approved' | 'rejected'
   rejection_reason: string | null
   reviewed_at: string | null

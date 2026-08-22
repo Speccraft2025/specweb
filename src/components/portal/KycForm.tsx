@@ -42,6 +42,8 @@ export default function KycForm({
   const [selfieFile, setSelfieFile] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(kyc?.status === 'submitted' || kyc?.status === 'approved')
+  const [error, setError] = useState('')
+  const [editingSubmitted, setEditingSubmitted] = useState(false)
 
   if (kyc?.status === 'approved') {
     return (
@@ -57,7 +59,7 @@ export default function KycForm({
     )
   }
 
-  if (kyc?.status === 'submitted' || submitted) {
+  if ((kyc?.status === 'submitted' || submitted) && !editingSubmitted) {
     return (
       <div className="text-center py-12">
         <div className="w-16 h-16 rounded-full bg-blue-400/10 flex items-center justify-center mx-auto mb-4">
@@ -67,6 +69,12 @@ export default function KycForm({
         <p className="text-[var(--text-muted)]">
           Your KYC documents are being reviewed. You&apos;ll be notified once verification is complete.
         </p>
+        <button
+          onClick={() => setEditingSubmitted(true)}
+          className="mt-6 px-5 py-2.5 bg-[var(--gold)] text-black font-semibold rounded-lg hover:bg-[var(--gold-dim)] transition-colors"
+        >
+          Update my details
+        </button>
       </div>
     )
   }
@@ -86,7 +94,7 @@ export default function KycForm({
           </div>
         </div>
         <button
-          onClick={() => { setSubmitted(false); setStep('info') }}
+          onClick={() => { setSubmitted(false); setEditingSubmitted(true); setStep('info') }}
           className="w-full py-3 bg-[var(--gold)] text-black font-semibold rounded-lg hover:bg-[var(--gold-dim)] transition-colors"
         >
           Resubmit KYC
@@ -96,10 +104,11 @@ export default function KycForm({
   }
 
   async function handleSubmit() {
+    setError('')
     setSubmitting(true)
     const supabase = createClient()
 
-    await supabase
+    const { error: artistError } = await supabase
       .from('artists')
       .update({
         full_legal_name: formData.full_legal_name,
@@ -113,40 +122,85 @@ export default function KycForm({
       })
       .eq('id', artist.id)
 
+    if (artistError) {
+      setError(artistError.message)
+      setSubmitting(false)
+      return
+    }
+
     let frontUrl: string | null = null
     let backUrl: string | null = null
     let selfieUrl: string | null = null
 
     if (frontFile) {
-      const { data } = await supabase.storage
+      const { data, error: frontError } = await supabase.storage
         .from('kyc-documents')
         .upload(`${artist.id}/${Date.now()}-front.${frontFile.name.split('.').pop()}`, frontFile)
+      if (frontError) {
+        setError(frontError.message)
+        setSubmitting(false)
+        return
+      }
       if (data) frontUrl = data.path
     }
     if (backFile) {
-      const { data } = await supabase.storage
+      const { data, error: backError } = await supabase.storage
         .from('kyc-documents')
         .upload(`${artist.id}/${Date.now()}-back.${backFile.name.split('.').pop()}`, backFile)
+      if (backError) {
+        setError(backError.message)
+        setSubmitting(false)
+        return
+      }
       if (data) backUrl = data.path
     }
     if (selfieFile) {
-      const { data } = await supabase.storage
+      const { data, error: selfieError } = await supabase.storage
         .from('kyc-documents')
         .upload(`${artist.id}/${Date.now()}-selfie.${selfieFile.name.split('.').pop()}`, selfieFile)
+      if (selfieError) {
+        setError(selfieError.message)
+        setSubmitting(false)
+        return
+      }
       if (data) selfieUrl = data.path
     }
 
-    await supabase.from('kyc_verifications').insert({
+    const payload = {
       artist_id: artist.id,
       document_type: documentType,
       document_front_url: frontUrl,
       document_back_url: backUrl,
       selfie_url: selfieUrl,
-      status: 'submitted',
-    })
+      status: 'submitted' as const,
+      rejection_reason: null,
+      reviewed_at: null,
+    }
+
+    let submitError: string | null = null
+
+    if (kyc?.id) {
+      const { error: kycError } = await supabase
+        .from('kyc_verifications')
+        .update(payload)
+        .eq('id', kyc.id)
+      submitError = kycError?.message || null
+    } else {
+      const { error: kycError } = await supabase
+        .from('kyc_verifications')
+        .insert(payload)
+      submitError = kycError?.message || null
+    }
+
+    if (submitError) {
+      setError(submitError)
+      setSubmitting(false)
+      return
+    }
 
     setSubmitting(false)
     setSubmitted(true)
+    setEditingSubmitted(false)
   }
 
   const steps: { key: Step; label: string; icon: typeof User }[] = [
@@ -191,6 +245,11 @@ export default function KycForm({
       </div>
 
       <div className="bg-[var(--dark-3)] border border-[var(--gray)] rounded-xl p-6">
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
         {step === 'info' && (
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-white mb-4">Personal Information</h2>

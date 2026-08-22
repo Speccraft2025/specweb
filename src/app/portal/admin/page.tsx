@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import PortalNav from '@/components/portal/PortalNav'
 import AdminDashboard from '@/components/portal/AdminDashboard'
+import type { KycVerification } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,27 @@ export default async function AdminPage() {
     .select('*')
     .order('signed_at', { ascending: false })
 
+  const kycRecordsWithUrls = await Promise.all(
+    ((kycRecords || []) as KycVerification[]).map(async (record) => {
+      async function signPath(path: string | null | undefined) {
+        if (!path) return null
+        const { data, error } = await admin.storage
+          .from('kyc-documents')
+          .createSignedUrl(path, 60 * 60)
+
+        if (error) return null
+        return data.signedUrl
+      }
+
+      return {
+        ...record,
+        document_front_signed_url: await signPath(record.document_front_url),
+        document_back_signed_url: await signPath(record.document_back_url),
+        selfie_signed_url: await signPath(record.selfie_url),
+      }
+    })
+  )
+
   return (
     <>
       <PortalNav artistName="Admin" />
@@ -44,7 +66,7 @@ export default async function AdminPage() {
         <AdminDashboard
           artists={artists || []}
           contracts={contracts || []}
-          kycRecords={kycRecords || []}
+          kycRecords={kycRecordsWithUrls}
           signatures={signatures || []}
         />
       </div>

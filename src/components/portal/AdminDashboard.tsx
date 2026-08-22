@@ -15,6 +15,7 @@ import {
   Eye,
   PenTool,
   AlertCircle,
+  ExternalLink,
 } from 'lucide-react'
 
 type Tab = 'overview' | 'artists' | 'contracts' | 'kyc'
@@ -318,6 +319,7 @@ function ContractsTab({ artists, contracts, signatures }: { artists: Artist[]; c
   const [inviting, setInviting] = useState(false)
   const [inviteLink, setInviteLink] = useState('')
   const [inviteMsg, setInviteMsg] = useState('')
+  const [countersigningId, setCountersigningId] = useState<string | null>(null)
 
   async function handleInvite() {
     setInviting(true)
@@ -374,6 +376,31 @@ function ContractsTab({ artists, contracts, signatures }: { artists: Artist[]; c
 
   function getArtistSig(contractId: string) {
     return signatures.find(s => s.contract_id === contractId && s.signer_type === 'artist')
+  }
+
+  function getCompanySig(contractId: string) {
+    return signatures.find(s => s.contract_id === contractId && s.signer_type === 'company')
+  }
+
+  async function handleCountersign(contractId: string) {
+    setCountersigningId(contractId)
+    setMessage('')
+
+    const res = await fetch('/api/admin/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'countersign_contract', contract_id: contractId }),
+    })
+
+    const data = await res.json()
+    if (res.ok) {
+      setMessage('Contract countersigned successfully')
+      setTimeout(() => window.location.reload(), 1500)
+    } else {
+      setMessage(`Error: ${data.error}`)
+    }
+
+    setCountersigningId(null)
   }
 
   return (
@@ -488,14 +515,16 @@ function ContractsTab({ artists, contracts, signatures }: { artists: Artist[]; c
                 <th className="text-left py-3 px-4 text-[var(--text-muted)] font-medium">Status</th>
                 <th className="text-left py-3 px-4 text-[var(--text-muted)] font-medium">Effective Date</th>
                 <th className="text-left py-3 px-4 text-[var(--text-muted)] font-medium">Signed</th>
+                <th className="text-left py-3 px-4 text-[var(--text-muted)] font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {contracts.length === 0 ? (
-                <tr><td colSpan={5} className="py-8 text-center text-[var(--text-muted)]">No contracts yet.</td></tr>
+                <tr><td colSpan={6} className="py-8 text-center text-[var(--text-muted)]">No contracts yet.</td></tr>
               ) : (
                 contracts.map((c) => {
                   const sig = getArtistSig(c.id)
+                  const companySig = getCompanySig(c.id)
                   return (
                     <tr key={c.id} className="border-b border-[var(--gray)]/30 hover:bg-[var(--dark-2)] transition-colors">
                       <td className="py-3 px-4 text-white font-medium">{getArtistName(c.artist_id)}</td>
@@ -507,6 +536,21 @@ function ContractsTab({ artists, contracts, signatures }: { artists: Artist[]; c
                           <span className="text-xs text-green-400">{new Date(sig.signed_at).toLocaleDateString('en-KE')}</span>
                         ) : (
                           <span className="text-xs text-[var(--text-muted)]">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {sig && !companySig ? (
+                          <button
+                            onClick={() => handleCountersign(c.id)}
+                            disabled={countersigningId === c.id}
+                            className="px-3 py-1.5 bg-[var(--gold)] text-black text-xs font-semibold rounded-lg hover:bg-[var(--gold-dim)] transition-colors disabled:opacity-30"
+                          >
+                            {countersigningId === c.id ? 'Signing...' : 'Countersign'}
+                          </button>
+                        ) : companySig ? (
+                          <span className="text-xs text-green-400">Countersigned</span>
+                        ) : (
+                          <span className="text-xs text-[var(--text-muted)]">Waiting for artist</span>
                         )}
                       </td>
                     </tr>
@@ -551,8 +595,6 @@ function KycTab({ artists, kycRecords }: { artists: Artist[]; kycRecords: KycVer
   }
 
   const pending = kycRecords.filter(k => k.status === 'submitted')
-  const reviewed = kycRecords.filter(k => k.status !== 'submitted' && k.status !== 'pending')
-
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-white">KYC Verifications</h2>
@@ -585,6 +627,42 @@ function KycTab({ artists, kycRecords }: { artists: Artist[]; kycRecords: KycVer
                   <p className="text-xs text-[var(--text-muted)] mb-1">Selfie</p>
                   <p className="text-white">{k.selfie_url ? 'Uploaded' : 'Missing'}</p>
                 </div>
+              </div>
+
+              <div className="flex gap-3 flex-wrap">
+                {k.document_front_signed_url && (
+                  <a
+                    href={k.document_front_signed_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-[var(--gray)] text-white text-sm rounded-lg hover:border-[var(--gold)] hover:text-[var(--gold)] transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    View Front
+                  </a>
+                )}
+                {k.document_back_signed_url && (
+                  <a
+                    href={k.document_back_signed_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-[var(--gray)] text-white text-sm rounded-lg hover:border-[var(--gold)] hover:text-[var(--gold)] transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    View Back
+                  </a>
+                )}
+                {k.selfie_signed_url && (
+                  <a
+                    href={k.selfie_signed_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-[var(--gray)] text-white text-sm rounded-lg hover:border-[var(--gold)] hover:text-[var(--gold)] transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    View Selfie
+                  </a>
+                )}
               </div>
 
               <div className="flex gap-3">
